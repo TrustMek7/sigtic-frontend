@@ -1,59 +1,156 @@
-# SigticFrontend
+# SIGTIC Frontend
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.11.
+PWA Angular del Sistema de Gestión de Tickets TI — Unidad de Informática Municipal.
 
-## Development server
+**Stack:** Angular 21 · Angular Material 3 · Standalone components · Signals · PWA (Service Worker)
 
-To start a local development server, run:
+---
+
+## Requisitos previos
+
+| Herramienta | Versión mínima | Verificar |
+|---|---|---|
+| Node.js | 20 | `node --version` |
+| Angular CLI | 21 | `ng version` |
+
+El backend Django debe estar corriendo en `http://localhost:8000` antes de iniciar el frontend.
+
+---
+
+## 1. Instalación
+
+```bash
+cd sigtic-frontend
+npm install
+```
+
+---
+
+## 2. Servidor de desarrollo
 
 ```bash
 ng serve
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Abre `http://localhost:4200`. El proxy en `proxy.conf.json` redirige automáticamente `/api/*` al backend en `localhost:8000`.
 
-## Code scaffolding
+**Credenciales de prueba:** `admin` / `admin123` (superuser Django, rol ADMIN)
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+---
 
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
+## 3. Build de producción
 
 ```bash
 ng build
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+Los archivos compilados quedan en `dist/sigtic-frontend/browser/`. Sirve esa carpeta con Nginx o Apache. El service worker (`ngsw-worker.js`) se activa automáticamente en producción.
 
-## Running unit tests
+---
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+## 4. Estructura del proyecto
 
-```bash
-ng test
+```
+src/
+├── environments/
+│   ├── environment.ts              # Dev: apiUrl = '/api/v1'
+│   └── environment.production.ts  # Prod: apiUrl = '/api/v1'
+├── styles.scss                     # Tema global, badges de estado, layout shell
+└── app/
+    ├── app.ts                      # Componente raíz → templateUrl: app.html
+    ├── app.html                    # Solo <router-outlet />
+    ├── app.routes.ts               # Rutas lazy-loaded con authGuard / roleGuard
+    ├── app.config.ts               # Providers globales
+    │
+    ├── core/
+    │   ├── auth/
+    │   │   ├── auth.service.ts         # Signals: _user, isAuthenticated, rol, esInformatica
+    │   │   ├── auth.guard.ts           # loadMe() + defaultIfEmpty → /login
+    │   │   ├── role.guard.ts           # roleGuard('ROL1', 'ROL2') factory
+    │   │   └── cookie.interceptor.ts   # withCredentials + silent refresh en 401
+    │   └── services/
+    │       ├── ticket.service.ts
+    │       ├── inventario.service.ts
+    │       ├── catalogo.service.ts     # shareReplay(1) — catálogos sin re-fetch
+    │       └── usuario.service.ts
+    │
+    ├── shared/
+    │   ├── models/                     # Interfaces TypeScript de todos los modelos
+    │   └── pipes/
+    │       └── replace.pipe.ts         # | replace:'T':' ' para fechas ISO
+    │
+    ├── layout/
+    │   └── shell/shell.component.ts    # Sidebar fijo + toolbar + router-outlet
+    │
+    └── features/
+        ├── auth/login/                 # Formulario login con show/hide password
+        ├── dashboard/                  # Métricas por estado + tickets recientes
+        ├── tickets/
+        │   ├── ticket-list/            # Tabla filtrable por estado
+        │   ├── ticket-create/          # Búsqueda dispositivo + alerta IP
+        │   ├── ticket-detail/          # Timeline historial + form diagnóstico + PDF
+        │   └── transicion-dialog/      # MatDialog: nuevo estado + selector técnico
+        ├── inventario/
+        │   ├── inventario-list/        # Tabla con filtros tipo / estado / búsqueda
+        │   ├── inventario-detail/      # Ficha completa con subtabla dinámica
+        │   └── inventario-form/        # Alta/edición, campos dinámicos por tipo
+        ├── almacen/                    # Stock consumibles + registro movimientos inline
+        ├── bajas/                      # Registro bajas con soporte sin-código
+        └── usuarios/                   # Gestión roles + encargados temporales
 ```
 
-## Running end-to-end tests
+---
 
-For end-to-end (e2e) testing, run:
+## 5. Autenticación
+
+- JWT en **httpOnly cookies** — nunca en localStorage (seguro contra XSS)
+- `cookie.interceptor.ts` añade `withCredentials: true` a todas las requests HTTP
+- En 401 (fuera de `/auth/`): intenta **silent refresh** → si falla, redirige a `/login`
+- `authGuard`: llama a `loadMe()` en cada carga inicial; `defaultIfEmpty` previene el `EmptyError` de Angular cuando no hay sesión
+
+---
+
+## 6. Roles y acceso por sección
+
+| Sección | USUARIO | TECNICO | ENCARGADO_INFO | JEFE_INFO | ADMIN |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Dashboard | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Tickets (propios) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Tickets (todos) | — | ✓ | ✓ | ✓ | ✓ |
+| Inventario | — | ✓ | ✓ | ✓ | ✓ |
+| Almacén | — | ✓ | ✓ | ✓ | ✓ |
+| Bajas | — | ✓ | ✓ | ✓ | ✓ |
+| Usuarios | — | — | — | ✓ | ✓ |
+
+---
+
+## 7. PWA
+
+La app es instalable en el escritorio/barra de tareas. En producción Chrome muestra el botón de instalación automáticamente. Configurado en:
+- `public/manifest.webmanifest` — nombre, íconos, `display: standalone`
+- `ngsw-config.json` — caché de app shell y rutas de API
+
+---
+
+## 8. Proxy (desarrollo)
+
+`proxy.conf.json` redirige `/api` a `http://localhost:8000`. Si el backend corre en otro host o puerto, edita ese archivo. El `angular.json` ya lo referencia en `serve.options.proxyConfig`.
+
+---
+
+## 9. Comandos de referencia
 
 ```bash
-ng e2e
+# Desarrollo
+ng serve
+
+# Compilar (modo desarrollo, sin optimizaciones)
+ng build --configuration=development
+
+# Build producción
+ng build
+
+# Actualizar dependencias
+npm outdated
+npm update
 ```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
