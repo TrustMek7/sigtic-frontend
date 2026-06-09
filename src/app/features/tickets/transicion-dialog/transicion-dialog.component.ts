@@ -1,4 +1,4 @@
-import { Component, inject, Inject } from '@angular/core';
+import { Component, inject, Inject, OnInit } from '@angular/core';
 import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -70,7 +70,7 @@ const TRANSICIONES: Record<EstadoTicket, { value: EstadoTicket; label: string }[
   `,
   styles: [`.dialog-form { display: flex; flex-direction: column; gap: 8px; min-width: 380px; } .full { width: 100%; }`],
 })
-export class TransicionDialogComponent {
+export class TransicionDialogComponent implements OnInit {
   ref = inject(MatDialogRef<TransicionDialogComponent>);
   data: TransicionData = inject(MAT_DIALOG_DATA);
   private fb = inject(FormBuilder);
@@ -85,6 +85,19 @@ export class TransicionDialogComponent {
 
   requiereTecnico(): boolean {
     return this.form.get('nuevo_estado')?.value === 'ASIGNADO';
+  }
+
+  ngOnInit() {
+    this.form.get('nuevo_estado')!.valueChanges.subscribe(val => {
+      const ctrl = this.form.get('tecnico_id')!;
+      if (val === 'ASIGNADO') {
+        ctrl.setValidators(Validators.required);
+      } else {
+        ctrl.clearValidators();
+        ctrl.setValue(null);
+      }
+      ctrl.updateValueAndValidity();
+    });
   }
 
   confirm() {

@@ -113,21 +113,22 @@ interface NavItem {
   styles: [`
     /* ── Brand ─────────────────────────────────────── */
     .sidebar-brand {
-      display: flex; align-items: center; gap: 10px;
-      padding: 18px 14px;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      padding: 24px 16px 20px;
       border-bottom: 1px solid rgba(255,255,255,.06);
+      text-align: center;
     }
     .brand-logo {
-      width: 38px; height: 38px; border-radius: 50%;
+      width: 120px; height: 120px; border-radius: 50%;
       overflow: hidden; flex-shrink: 0;
-      background: white; padding: 4px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.45);
+      background: white; padding: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.6);
       display: flex; align-items: center; justify-content: center;
       img { width: 100%; height: 100%; object-fit: contain; }
     }
-    .brand-text { display: flex; flex-direction: column; line-height: 1.25; }
-    .brand-name { font-size: 12px; font-weight: 700; color: white; }
-    .brand-sub  { font-size: 10px; color: rgba(255,255,255,.45); }
+    .brand-text { display: flex; flex-direction: column; line-height: 1.3; }
+    .brand-name { font-size: 13px; font-weight: 700; color: white; }
+    .brand-sub  { font-size: 11px; color: rgba(255,255,255,.55); }
 
     /* ── Section label ─────────────────────────────── */
     .sidebar-section-label {

@@ -3,10 +3,11 @@ import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatAutocompleteModule, MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { ToastService } from '../../core/services/toast.service';
@@ -22,8 +23,8 @@ import { InventarioService } from '../../core/services/inventario.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule,
-    MatCardModule, MatTableModule, MatButtonModule, MatIconModule,
-    MatFormFieldModule, MatInputModule, MatCheckboxModule,
+    MatCardModule, MatTableModule, MatButtonModule, MatButtonToggleModule, MatIconModule,
+    MatFormFieldModule, MatInputModule, MatAutocompleteModule,
     MatProgressSpinnerModule, MatSnackBarModule,
   ],
   template: `
@@ -31,37 +32,74 @@ import { InventarioService } from '../../core/services/inventario.service';
       <h1>Bienes de Baja</h1>
     </div>
 
-    <!-- Formulario de registro -->
     <mat-card class="sigtic-card">
       <mat-card-title>Registrar Baja</mat-card-title>
       <mat-card-content>
         <form [formGroup]="form" (ngSubmit)="onSubmit()" class="form-grid">
-          <!-- Toggle sin registro -->
-          <div class="full-width" style="padding: 4px 0 8px">
-            <mat-checkbox formControlName="sin_registro" (change)="onSinRegistroChange()">
-              Dispositivo <strong>sin código de inventario</strong>
-            </mat-checkbox>
+
+          <!-- Paso 1: ¿Registrado? -->
+          <div class="full-width step-toggle">
+            <span class="step-label">¿El dispositivo está registrado en el inventario?</span>
+            <mat-button-toggle-group [value]="registrado()" (change)="onRegistradoChange($event.value)">
+              <mat-button-toggle [value]="true">
+                <mat-icon>inventory_2</mat-icon>&nbsp;Sí, tiene código
+              </mat-button-toggle>
+              <mat-button-toggle [value]="false">
+                <mat-icon>device_unknown</mat-icon>&nbsp;Sin registro
+              </mat-button-toggle>
+            </mat-button-toggle-group>
           </div>
 
-          @if (!form.value.sin_registro) {
-            <!-- Búsqueda por código -->
+          <!-- Paso 2a: registrado → autocomplete -->
+          @if (registrado()) {
             <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Código de inventario</mat-label>
-              <input matInput formControlName="busqueda" placeholder="PC-001, IMP-003...">
+              <mat-label>Buscar dispositivo por código</mat-label>
+              <input matInput formControlName="busqueda"
+                     placeholder="PC-001, IMP-003..."
+                     [matAutocomplete]="autoDisp"
+                     autocomplete="off">
               <mat-icon matSuffix>search</mat-icon>
+              <mat-autocomplete #autoDisp="matAutocomplete"
+                                [displayWith]="displayFn"
+                                (optionSelected)="seleccionarDispositivo($event)">
+                @for (d of sugerencias(); track d.id) {
+                  <mat-option [value]="d">
+                    <div class="autocomplete-opt">
+                      <strong>{{ d.cod_inventario }}</strong>
+                      <span class="opt-tipo">{{ d.tipo_nombre }}</span>
+                      <span class="opt-sede">{{ d.sede_nombre }}</span>
+                    </div>
+                  </mat-option>
+                }
+                @if (buscando()) {
+                  <mat-option disabled>
+                    <span style="display:flex;align-items:center;gap:8px">
+                      <mat-spinner diameter="16"></mat-spinner> Buscando...
+                    </span>
+                  </mat-option>
+                }
+                @if (!buscando() && busquedaActiva() && sugerencias().length === 0) {
+                  <mat-option disabled>Sin resultados para "{{ form.value.busqueda }}"</mat-option>
+                }
+              </mat-autocomplete>
             </mat-form-field>
 
             @if (dispositivo()) {
               <div class="dispositivo-card full-width">
                 <mat-icon color="primary">devices</mat-icon>
-                <div>
+                <div class="disp-info">
                   <strong>{{ dispositivo()!.cod_inventario }}</strong> — {{ dispositivo()!.tipo_nombre }}
-                  <div style="font-size:12px;color:#666">{{ dispositivo()!.sede_nombre }}</div>
+                  <div class="disp-sede">{{ dispositivo()!.sede_nombre }}</div>
                 </div>
+                <button mat-icon-button type="button" (click)="limpiarDispositivo()">
+                  <mat-icon>close</mat-icon>
+                </button>
               </div>
             }
-          } @else {
-            <!-- Campos manuales para sin registro -->
+          }
+
+          <!-- Paso 2b: sin registro → campos manuales -->
+          @if (!registrado()) {
             <mat-form-field appearance="outline">
               <mat-label>Código referencial</mat-label>
               <input matInput formControlName="sr_cod_inventario">
@@ -107,7 +145,7 @@ import { InventarioService } from '../../core/services/inventario.service';
 
           <div class="form-actions full-width">
             <button mat-raised-button color="warn" type="submit"
-                    [disabled]="form.invalid || (!dispositivo() && !form.value.sin_registro) || submitting()">
+                    [disabled]="form.invalid || (registrado() && !dispositivo()) || submitting()">
               @if (submitting()) { <mat-spinner diameter="20" /> } @else { <mat-icon>delete_forever</mat-icon> }
               {{ submitting() ? '' : 'Registrar Baja' }}
             </button>
@@ -163,6 +201,13 @@ import { InventarioService } from '../../core/services/inventario.service';
     </mat-card>
   `,
   styles: [`
+    .step-toggle { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 12px; }
+    .step-label { font-size: 14px; font-weight: 500; color: var(--c-text-muted, #64748B); }
+    mat-button-toggle-group { border-radius: 8px; }
+    mat-button-toggle { font-size: 13px; }
+    .autocomplete-opt { display: flex; align-items: center; gap: 10px; font-size: 13px; min-width: 0; }
+    .opt-tipo { color: #64748B; }
+    .opt-sede { margin-left: auto; font-size: 11px; color: #94A3B8; white-space: nowrap; }
     .loading-center { display: flex; justify-content: center; padding: 24px; }
     table { width: 100%; }
     td.mat-cell { font-size: 13px; }
@@ -171,6 +216,8 @@ import { InventarioService } from '../../core/services/inventario.service';
       padding: 10px 14px; background: #E3F2FD;
       border-radius: 8px; border-left: 4px solid #1565C0;
     }
+    .disp-info { flex: 1; }
+    .disp-sede { font-size: 12px; color: #666; }
   `],
 })
 export class BajasComponent implements OnInit {
@@ -183,11 +230,14 @@ export class BajasComponent implements OnInit {
   loading = signal(true);
   submitting = signal(false);
   dispositivo = signal<DispositivoList | null>(null);
+  sugerencias = signal<DispositivoList[]>([]);
+  registrado = signal(true);
+  buscando = signal(false);
+  busquedaActiva = signal(false);
 
   bajaCols = ['fecha', 'codigo', 'motivo', 'estado', 'registrado_por'];
 
   form = this.fb.group({
-    sin_registro: [false],
     busqueda: [''],
     sr_cod_inventario: [''],
     sr_descripcion: [''],
@@ -204,23 +254,51 @@ export class BajasComponent implements OnInit {
 
   ngOnInit() {
     this.form.get('busqueda')!.valueChanges.pipe(
-      debounceTime(500),
+      debounceTime(300),
       distinctUntilChanged(),
       switchMap(q => {
-        if (!q || q.length < 3) { this.dispositivo.set(null); return of(null); }
+        this.dispositivo.set(null);
+        if (!q || typeof q !== 'string' || q.length < 2) {
+          this.sugerencias.set([]);
+          this.busquedaActiva.set(false);
+          this.buscando.set(false);
+          return of(null);
+        }
+        this.buscando.set(true);
+        this.busquedaActiva.set(true);
         return this.inventarioService.buscarPorCodigo(q).pipe(catchError(() => of(null)));
       }),
     ).subscribe(res => {
-      const items = res?.results ?? [];
-      this.dispositivo.set(items.length === 1 ? items[0] : null);
+      this.buscando.set(false);
+      this.sugerencias.set(res?.results ?? []);
     });
 
     this.loadBajas();
   }
 
-  onSinRegistroChange() {
+  displayFn = (d: DispositivoList | string | null): string => {
+    if (!d) return '';
+    if (typeof d === 'string') return d;
+    return d.cod_inventario;
+  };
+
+  onRegistradoChange(value: boolean) {
+    this.registrado.set(value);
+    this.limpiarDispositivo();
+  }
+
+  seleccionarDispositivo(event: MatAutocompleteSelectedEvent) {
+    const d = event.option.value as DispositivoList;
+    this.dispositivo.set(d);
+    this.sugerencias.set([]);
+    this.busquedaActiva.set(false);
+  }
+
+  limpiarDispositivo() {
     this.dispositivo.set(null);
-    this.form.get('busqueda')?.setValue('');
+    this.sugerencias.set([]);
+    this.busquedaActiva.set(false);
+    this.form.get('busqueda')!.setValue('', { emitEvent: false });
   }
 
   private loadBajas() {
@@ -234,13 +312,13 @@ export class BajasComponent implements OnInit {
     if (this.form.invalid) return;
     const v = this.form.value;
     const payload: Record<string, unknown> = {
-      sin_registro: v.sin_registro,
+      sin_registro: !this.registrado(),
       motivo: v.motivo,
       fecha: v.fecha,
       lugar_origen: v.lugar_origen,
       observacion: v.observacion,
     };
-    if (!v.sin_registro) {
+    if (this.registrado()) {
       if (!this.dispositivo()) return;
       payload['dispositivo'] = this.dispositivo()!.id;
     } else {
@@ -255,8 +333,9 @@ export class BajasComponent implements OnInit {
     this.http.post<BienBaja>(`${this.base}/bajas/`, payload).subscribe({
       next: () => {
         this.toast.success('Baja registrada correctamente.');
-        this.form.reset({ sin_registro: false, fecha: new Date().toISOString().slice(0, 10) });
-        this.dispositivo.set(null);
+        this.form.reset({ fecha: new Date().toISOString().slice(0, 10) });
+        this.registrado.set(true);
+        this.limpiarDispositivo();
         this.submitting.set(false);
         this.loading.set(true);
         this.loadBajas();
