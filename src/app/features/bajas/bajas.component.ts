@@ -8,7 +8,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { ToastService } from '../../core/services/toast.service';
 import { HttpClient } from '@angular/common/http';
 import { debounceTime, distinctUntilChanged, switchMap, of, catchError } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -176,7 +177,7 @@ export class BajasComponent implements OnInit {
   private http = inject(HttpClient);
   private inventarioService = inject(InventarioService);
   private fb = inject(FormBuilder);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
 
   bajas = signal<BienBaja[]>([]);
   loading = signal(true);
@@ -253,7 +254,7 @@ export class BajasComponent implements OnInit {
     this.submitting.set(true);
     this.http.post<BienBaja>(`${this.base}/bajas/`, payload).subscribe({
       next: () => {
-        this.snackBar.open('Baja registrada correctamente', 'OK', { duration: 3000 });
+        this.toast.success('Baja registrada correctamente.');
         this.form.reset({ sin_registro: false, fecha: new Date().toISOString().slice(0, 10) });
         this.dispositivo.set(null);
         this.submitting.set(false);
@@ -262,7 +263,7 @@ export class BajasComponent implements OnInit {
       },
       error: err => {
         this.submitting.set(false);
-        this.snackBar.open(err?.error?.detail ?? 'Error al registrar', 'Cerrar', { duration: 4000 });
+        this.toast.error(err?.error?.detail ?? 'Error al registrar baja.');
       },
     });
   }

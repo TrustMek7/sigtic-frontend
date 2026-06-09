@@ -9,7 +9,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { ToastService } from '../../../core/services/toast.service';
 import { AsyncPipe } from '@angular/common';
 import { InventarioService } from '../../../core/services/inventario.service';
 import { CatalogoService } from '../../../core/services/catalogo.service';
@@ -288,7 +289,7 @@ export class InventarioFormComponent implements OnInit {
   private inventarioService = inject(InventarioService);
   private router = inject(Router);
   private fb = inject(FormBuilder);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
 
   loadingInit = signal(false);
   submitting = signal(false);
@@ -379,7 +380,7 @@ export class InventarioFormComponent implements OnInit {
           if (d.impresora) this.form.get('impresora')!.patchValue(d.impresora as any);
           this.loadingInit.set(false);
         },
-        error: () => { this.loadingInit.set(false); this.snackBar.open('Error al cargar', 'Cerrar', { duration: 3000 }); },
+        error: () => { this.loadingInit.set(false); this.toast.error('Error al cargar el dispositivo.'); },
       });
     }
   }
@@ -415,12 +416,12 @@ export class InventarioFormComponent implements OnInit {
 
     op.subscribe({
       next: res => {
-        this.snackBar.open(this.id ? 'Dispositivo actualizado' : 'Dispositivo creado', 'OK', { duration: 2500 });
+        this.toast.success(this.id ? 'Dispositivo actualizado.' : 'Dispositivo creado.');
         this.router.navigate(['/inventario', res.id]);
       },
       error: err => {
         this.submitting.set(false);
-        this.snackBar.open(err?.error?.detail ?? 'Error al guardar', 'Cerrar', { duration: 4000 });
+        this.toast.error(err?.error?.detail ?? 'Error al guardar dispositivo.');
       },
     });
   }

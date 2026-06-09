@@ -8,7 +8,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { ToastService } from '../../../core/services/toast.service';
 import { debounceTime, distinctUntilChanged, switchMap, of, catchError } from 'rxjs';
 import { TicketService } from '../../../core/services/ticket.service';
 import { InventarioService } from '../../../core/services/inventario.service';
@@ -126,7 +127,7 @@ export class TicketCreateComponent {
   private inventarioService = inject(InventarioService);
   private router = inject(Router);
   private fb = inject(FormBuilder);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
 
   dispositivo = signal<DispositivoList | null>(null);
   submitting = signal(false);
@@ -166,7 +167,7 @@ export class TicketCreateComponent {
       next: (res) => {
         this.ipWarning.set(res.ip_warning ?? false);
         if (!res.ip_warning) {
-          this.snackBar.open('Ticket creado exitosamente', 'OK', { duration: 3000 });
+          this.toast.success('Ticket creado exitosamente.');
           this.router.navigate(['/tickets', res.id]);
         } else {
           this.submitting.set(false);
@@ -174,7 +175,7 @@ export class TicketCreateComponent {
       },
       error: (err) => {
         this.submitting.set(false);
-        this.snackBar.open(err?.error?.detail ?? 'Error al crear el ticket', 'Cerrar', { duration: 4000 });
+        this.toast.error(err?.error?.detail ?? 'Error al crear el ticket.');
       },
     });
   }

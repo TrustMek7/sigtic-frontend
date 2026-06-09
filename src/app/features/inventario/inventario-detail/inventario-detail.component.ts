@@ -6,7 +6,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { ToastService } from '../../../core/services/toast.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { InventarioService } from '../../../core/services/inventario.service';
 import { DispositivoDetail } from '../../../shared/models';
@@ -184,7 +185,7 @@ export class InventarioDetailComponent implements OnInit {
   @Input() id!: string;
   auth = inject(AuthService);
   private inventarioService = inject(InventarioService);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
 
   disp = signal<DispositivoDetail | null>(null);
   loading = signal(true);
@@ -192,7 +193,7 @@ export class InventarioDetailComponent implements OnInit {
   ngOnInit() {
     this.inventarioService.get(+this.id).subscribe({
       next: d => { this.disp.set(d); this.loading.set(false); },
-      error: () => { this.loading.set(false); this.snackBar.open('Error al cargar dispositivo', 'Cerrar', { duration: 3000 }); },
+      error: () => { this.loading.set(false); this.toast.error('Error al cargar dispositivo.'); },
     });
   }
 

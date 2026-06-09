@@ -61,6 +61,7 @@ export interface TicketList {
   dispositivo: number;
   dispositivo_cod: string;
   solicitante_nombre: string;
+  tecnico: number | null;
   tecnico_nombre: string;
   tipo_mantenimiento: string;
   fecha_creacion: string;

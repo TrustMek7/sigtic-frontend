@@ -11,7 +11,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { ToastService } from '../../../core/services/toast.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TicketService } from '../../../core/services/ticket.service';
 import { UsuarioService } from '../../../core/services/usuario.service';
@@ -39,7 +40,7 @@ import { ReplacePipe } from '../../../shared/pipes/replace.pipe';
         <h1>Ticket {{ ticket()!.numero }}</h1>
         <div class="header-actions">
           <span [class]="'badge badge-' + ticket()!.estado.toLowerCase()">{{ ticket()!.estado_display }}</span>
-          @if (!esTerminal() && auth.esInformatica()) {
+          @if (!esTerminal() && auth.esJefeOEncargado()) {
             <button mat-raised-button color="accent" (click)="openTransicion()">
               <mat-icon>swap_horiz</mat-icon> Cambiar Estado
             </button>
@@ -176,7 +177,7 @@ export class TicketDetailComponent implements OnInit {
   private ticketService = inject(TicketService);
   private usuarioService = inject(UsuarioService);
   private dialog = inject(MatDialog);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
   private fb = inject(FormBuilder);
 
   ticket = signal<TicketDetail | null>(null);
@@ -226,8 +227,8 @@ export class TicketDetailComponent implements OnInit {
     ref.afterClosed().subscribe(result => {
       if (result) {
         this.ticketService.transicion(this.ticket()!.id, result).subscribe({
-          next: t => { this.ticket.set(t); this.snackBar.open('Estado actualizado', 'OK', { duration: 2500 }); },
-          error: err => this.snackBar.open(err?.error?.detail ?? 'Error', 'Cerrar', { duration: 4000 }),
+          next: t => { this.ticket.set(t); this.toast.success('Estado actualizado.'); },
+          error: err => this.toast.error(err?.error?.detail ?? 'Error al cambiar estado.'),
         });
       }
     });
@@ -236,18 +237,18 @@ export class TicketDetailComponent implements OnInit {
   onDiagnostico() {
     if (this.diagForm.invalid) return;
     this.ticketService.diagnostico(this.ticket()!.id, this.diagForm.value as any).subscribe({
-      next: () => { this.snackBar.open('Diagnóstico registrado', 'OK', { duration: 2500 }); this.load(); },
-      error: err => this.snackBar.open(err?.error?.detail ?? 'Error', 'Cerrar', { duration: 4000 }),
+      next: () => { this.toast.success('Diagnóstico registrado.'); this.load(); },
+      error: err => this.toast.error(err?.error?.detail ?? 'Error al guardar diagnóstico.'),
     });
   }
 
   generarDocumento() {
     this.ticketService.generarDocumento(this.ticket()!.id).subscribe({
       next: res => {
-        this.snackBar.open('Documento generado', 'Descargar', { duration: 5000 })
+        this.toast.successWithAction('Documento generado', 'Descargar')
           .onAction().subscribe(() => window.open(res.url, '_blank'));
       },
-      error: err => this.snackBar.open(err?.error?.detail ?? 'Error', 'Cerrar', { duration: 4000 }),
+      error: err => this.toast.error(err?.error?.detail ?? 'Error al generar documento.'),
     });
   }
 }

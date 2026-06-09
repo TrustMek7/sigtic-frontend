@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject, OnInit, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
@@ -9,8 +9,10 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { ToastService } from '../../core/services/toast.service';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { HttpClient } from '@angular/common/http';
 import { SlicePipe } from '@angular/common';
 import { environment } from '../../../environments/environment';
@@ -25,7 +27,7 @@ import { StockConsumible, MovimientoStock } from '../../shared/models';
     SlicePipe,
     MatCardModule, MatTableModule, MatButtonModule, MatIconModule,
     MatFormFieldModule, MatInputModule, MatSelectModule, MatDialogModule,
-    MatProgressSpinnerModule, MatSnackBarModule, MatDividerModule,
+    MatProgressSpinnerModule, MatSnackBarModule, MatDividerModule, MatTooltipModule,
   ],
   template: `
     <div class="page-header">
@@ -36,10 +38,49 @@ import { StockConsumible, MovimientoStock } from '../../shared/models';
     <mat-card class="sigtic-card">
       <mat-card-title>Stock Actual</mat-card-title>
       <mat-card-content>
+        <!-- Barra de filtros -->
+        <div class="filtros-bar">
+          <mat-form-field appearance="outline" class="filtro-q">
+            <mat-label>Buscar consumible</mat-label>
+            <input matInput [value]="filtroQ()" (input)="filtroQ.set($any($event.target).value)" placeholder="Nombre...">
+            <mat-icon matSuffix>search</mat-icon>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="filtro-tipo">
+            <mat-label>Tipo</mat-label>
+            <mat-select [value]="filtroTipo()" (valueChange)="filtroTipo.set($event)">
+              <mat-option value="">Todos</mat-option>
+              <mat-option value="TONER">Tóner</mat-option>
+              <mat-option value="TINTA">Tinta</mat-option>
+              <mat-option value="PAPEL">Papel</mat-option>
+              <mat-option value="RIBBON">Ribbon</mat-option>
+              <mat-option value="OTRO">Otro</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <button mat-stroked-button
+                  [color]="soloAlerta() ? 'warn' : ''"
+                  (click)="soloAlerta.set(!soloAlerta())"
+                  matTooltip="Mostrar solo ítems bajo el mínimo">
+            <mat-icon>warning</mat-icon>
+            {{ soloAlerta() ? 'Solo alertas' : 'Ver alertas' }}
+          </button>
+
+          @if (filtroQ() || filtroTipo() || soloAlerta()) {
+            <button mat-icon-button matTooltip="Limpiar filtros" (click)="limpiarFiltros()">
+              <mat-icon>filter_alt_off</mat-icon>
+            </button>
+          }
+
+          <span class="filtro-count">
+            {{ stockFiltrado().length }} de {{ stock().length }} ítems
+          </span>
+        </div>
+
         @if (loadingStock()) {
           <div class="loading-center"><mat-spinner diameter="36" /></div>
         } @else {
-          <table mat-table [dataSource]="stock()">
+          <table mat-table [dataSource]="stockFiltrado()">
             <ng-container matColumnDef="consumible">
               <th mat-header-cell *matHeaderCellDef>Consumible</th>
               <td mat-cell *matCellDef="let s">
@@ -172,11 +213,21 @@ import { StockConsumible, MovimientoStock } from '../../shared/models';
     table { width: 100%; }
     th.mat-header-cell { font-size: 12px; font-weight: 600; color: #666; }
     td.mat-cell { font-size: 13px; }
+    .filtros-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .filtro-q    { flex: 2; min-width: 180px; }
+    .filtro-tipo { flex: 1; min-width: 130px; }
+    .filtro-count { font-size: 12px; color: #9E9E9E; margin-left: 4px; white-space: nowrap; }
   `],
 })
 export class AlmacenComponent implements OnInit {
   private http = inject(HttpClient);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
   private fb = inject(FormBuilder);
 
   stock = signal<StockConsumible[]>([]);
@@ -187,6 +238,20 @@ export class AlmacenComponent implements OnInit {
   movimientoOpen = signal(false);
   movimientoTipo = signal<'INGRESO' | 'SALIDA'>('INGRESO');
   stockSeleccionado = signal<StockConsumible | null>(null);
+
+  filtroQ = signal('');
+  filtroTipo = signal('');
+  soloAlerta = signal(false);
+
+  stockFiltrado = computed(() => {
+    let list = this.stock();
+    const q = this.filtroQ().trim().toLowerCase();
+    const tipo = this.filtroTipo();
+    if (q) list = list.filter(s => s.consumible_nombre.toLowerCase().includes(q));
+    if (tipo) list = list.filter(s => s.consumible_tipo === tipo);
+    if (this.soloAlerta()) list = list.filter(s => s.bajo_minimo);
+    return list;
+  });
 
   stockCols = ['consumible', 'marca', 'stock_actual', 'stock_minimo', 'orden_compra', 'acciones'];
   movCols = ['fecha', 'tipo', 'consumible', 'cantidad', 'registrado_por', 'referencia'];
@@ -218,6 +283,12 @@ export class AlmacenComponent implements OnInit {
     });
   }
 
+  limpiarFiltros() {
+    this.filtroQ.set('');
+    this.filtroTipo.set('');
+    this.soloAlerta.set(false);
+  }
+
   openMovimiento(s: StockConsumible, tipo: 'INGRESO' | 'SALIDA') {
     this.stockSeleccionado.set(s);
     this.movimientoTipo.set(tipo);
@@ -235,7 +306,7 @@ export class AlmacenComponent implements OnInit {
     };
     this.http.post<MovimientoStock>(`${this.base}/movimientos/`, payload).subscribe({
       next: () => {
-        this.snackBar.open('Movimiento registrado', 'OK', { duration: 2500 });
+        this.toast.success('Movimiento registrado correctamente.');
         this.submitting.set(false);
         this.movimientoOpen.set(false);
         this.loadingStock.set(true);
@@ -245,7 +316,7 @@ export class AlmacenComponent implements OnInit {
       },
       error: err => {
         this.submitting.set(false);
-        this.snackBar.open(err?.error?.detail ?? 'Error', 'Cerrar', { duration: 4000 });
+        this.toast.error(err?.error?.detail ?? 'Error al registrar movimiento.');
       },
     });
   }
